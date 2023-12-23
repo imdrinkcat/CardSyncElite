@@ -1,19 +1,48 @@
 package com.drinkcat.cardsyncelite.controller;
 
+import com.drinkcat.cardsyncelite.Main;
+import com.drinkcat.cardsyncelite.MainApplication;
+import com.drinkcat.cardsyncelite.module.SyncRule;
 import com.drinkcat.cardsyncelite.module.SyncTask;
+import com.drinkcat.cardsyncelite.util.AlertUtil;
 import com.drinkcat.cardsyncelite.util.DataStoreUtil;
+import com.drinkcat.cardsyncelite.util.ExtensionsUtil;
+import javafx.application.Platform;
 import javafx.beans.value.ChangeListener;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
+import javafx.fxml.FXMLLoader;
 import javafx.scene.control.*;
 import javafx.scene.input.MouseEvent;
+import javafx.scene.layout.AnchorPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.VBox;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.Stage;
+import javafx.util.Callback;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.concurrent.CompletableFuture;
 
 public class MainController{
+    @FXML
+    public Button createSyncRule;
+    @FXML
+    public ListView ruleList;
+    @FXML
+    public VBox taskDetailPane;
+    @FXML
+    public Button startTask;
+    @FXML
+    public SplitPane basePane;
+    @FXML
+    public AnchorPane taskPane;
+    @FXML
+    public HBox configPane;
     @FXML
     private Label detailTaskName;
     @FXML
@@ -25,24 +54,64 @@ public class MainController{
     @FXML
     private ListView<SyncTask> taskList;
     private ChangeListener<Integer> choiceBoxListener;
+    private static SyncTask selectedTask = null;
     @FXML
     public void initialize() {
-        var tasks = DataStoreUtil.getTask();
-        tasks.forEach(SyncTask::startListening);
-
         // 初始化任务列表
-        ObservableList<SyncTask> syncTasks = FXCollections
-                .observableArrayList(tasks);
-        taskList.setItems(syncTasks);
-        taskList.setCellFactory(param -> new ListCell<>() {
+        //var tasks = DataStoreUtil.getTask();
+        //tasks.forEach(SyncTask::startListening);
+        //ObservableList<SyncTask> syncTasks = FXCollections
+        //        .observableArrayList(tasks);
+        //taskList.setItems(syncTasks);
+        taskList.setCellFactory(new Callback<ListView<SyncTask>, ListCell<SyncTask>>() {
             @Override
-            protected void updateItem(SyncTask item, boolean empty) {
-                super.updateItem(item, empty);
-                if (empty || item == null) {
-                    setText(null);
-                } else {
-                    setText(item.getTaskName());
-                }
+            public ListCell<SyncTask> call(ListView<SyncTask> syncTaskListView) {
+                return new ListCell<>() {
+                    @Override
+                    protected void updateItem(SyncTask task, boolean empty) {
+                        super.updateItem(task, empty);
+                        if(empty|| task == null) return;
+                        FXMLLoader loader = new FXMLLoader(MainApplication.class.getResource("view/TaskCardView.fxml"));
+                        try {
+                            this.setGraphic(loader.load());
+                            TaskCardController controller = loader.getController();
+                            controller.setTask(task);
+                        } catch (IOException e) {
+                            throw new RuntimeException("任务列表视图加载失败!");
+                        }
+                    }
+                };
+            }
+        });
+
+        // 初始化同步规则列表
+        ruleList.setCellFactory(new Callback<ListView<SyncRule>, ListCell<SyncRule>>() {
+            @Override
+            public ListCell<SyncRule> call(ListView<SyncRule> syncRuleListView) {
+                return new ListCell<>() {
+                    @Override
+                    protected void updateItem(SyncRule rule, boolean empty) {
+                        super.updateItem(rule, empty);
+                        if(empty|| rule == null) {
+                            this.setText(null);
+                            this.setGraphic(null);
+                            return;
+                        }
+                        FXMLLoader loader = new FXMLLoader(MainApplication.class.getResource("view/RuleCardView.fxml"));
+                        try {
+                            this.setGraphic(loader.load());
+                            RuleCardController controller = loader.getController();
+                            rule.setMain(MainController.this);
+                            controller.setDisable(configPane.isDisable());
+                            controller.setRule(rule);
+                            controller.setProgressInfoText(new Label(rule.getInfoText()));
+                            controller.setProgressBar(new ProgressBar(rule.getProgress()));
+                            controller.setMain(MainController.this);
+                        } catch (IOException e) {
+                            throw new RuntimeException("任务列表视图加载失败!");
+                        }
+                    }
+                };
             }
         });
 
@@ -55,8 +124,8 @@ public class MainController{
 
     @FXML
     public void onTaskClick() {
-        var selectedItem = taskList.getSelectionModel().getSelectedItem();
-        changeTaskDetail(selectedItem);
+        selectedTask = taskList.getSelectionModel().getSelectedItem();
+        changeTaskDetail(selectedTask);
     }
 
     @FXML
@@ -65,13 +134,25 @@ public class MainController{
     }
 
     public void changeTaskDetail(SyncTask task) {
-        detailThreadNum.getSelectionModel().selectedItemProperty().removeListener(choiceBoxListener);
-        detailTaskName.setText(task.getTaskName());
-        detailThreadNum.getSelectionModel().select(task.getMaxThreads() - 1);
-        detailSourcePath.setText(task.getSource().toString());
+        Platform.runLater(() -> {
+            taskDetailPane.setDisable(false);
 
-        detailThreadNum.getSelectionModel().selectedItemProperty().addListener(choiceBoxListener);
+            detailThreadNum.getSelectionModel().selectedItemProperty().removeListener(choiceBoxListener);
+            detailTaskName.setText(task.getTaskName());
+            detailThreadNum.getSelectionModel().select(task.getMaxThreads() - 1);
+            detailSourcePath.setText(task.getSource().toString());
+            detailThreadNum.getSelectionModel().selectedItemProperty().addListener(choiceBoxListener);
+            refreshRules(task);
+        });
     }
+
+    public void refreshRules(SyncTask task) {
+        Platform.runLater(() -> {
+            ruleList.setItems(FXCollections.observableArrayList(task.getSyncRules()));
+        });
+    }
+
+
 
     @FXML
     public void changeSourcePath(MouseEvent mouseEvent) {
@@ -86,15 +167,55 @@ public class MainController{
 
         // 处理用户的选择
         if (selectedDirectory != null) {
-            // 用户选择了目录，可以在这里进行相应的处理
             String selectedPath = selectedDirectory.getAbsolutePath();
-            System.out.println("用户选择的目录：" + selectedPath);
-
-            // 调用你的其他方法，传递用户选择的目录
-            // yourMethod(selectedPath);
-        } else {
-            // 用户取消了选择
-            System.out.println("用户取消了选择");
+            if(selectedPath == null) return;
+            selectedTask.setSource(Paths.get(selectedPath));
+            detailSourcePath.setText(selectedPath);
         }
+    }
+
+    @FXML
+    public void startSyncTask(MouseEvent mouseEvent) {
+        taskPane.setDisable(true);
+        detailSourcePath.setDisable(true);
+        detailThreadNum.setDisable(true);
+        detailChangeSourcePath.setDisable(true);
+        startTask.setDisable(true);
+        createSyncRule.setDisable(true);
+
+        selectedTask.startSyncTask(MainController.this);
+    }
+
+    public void taskCompleteCallback() {
+        taskPane.setDisable(false);
+        detailSourcePath.setDisable(false);
+        detailThreadNum.setDisable(false);
+        detailChangeSourcePath.setDisable(false);
+        startTask.setDisable(false);
+        createSyncRule.setDisable(false);
+
+        Platform.runLater(() -> {
+            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+            alert.setTitle("提示信息");
+            alert.setHeaderText(null);
+            alert.setContentText("同步任务完成!");
+            alert.showAndWait();
+        });
+    }
+
+    @FXML
+    public void createNewRule(MouseEvent mouseEvent) {
+        SyncRule rule = new SyncRule();
+        rule.setMain(MainController.this);
+        rule.setExtensions(ExtensionsUtil.allExtensions.extensions);
+        rule.setNeedCheck(true);
+        rule.setTask(selectedTask);
+        rule.setTarget(Path.of("/"));
+        rule.setNeedRename(false);
+        rule.setMaintainStructure(false);
+        rule.setTaskID(selectedTask.getTaskID());
+        selectedTask.getSyncRules().add(rule);
+        DataStoreUtil.updateTask(selectedTask);
+        refreshRules(selectedTask);
     }
 }

@@ -1,27 +1,39 @@
 package com.drinkcat.cardsyncelite.module;
 
+import com.drinkcat.cardsyncelite.controller.MainController;
+import com.drinkcat.cardsyncelite.core.CoreSyncEngine;
 import com.drinkcat.cardsyncelite.util.DataStoreUtil;
 import javafx.beans.property.SimpleIntegerProperty;
+import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.value.ChangeListener;
 
+import java.io.IOException;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.FutureTask;
+import java.util.stream.Collectors;
 
 public class SyncTask {
     private List<SyncRule> syncRules = new ArrayList<>();
     private SimpleStringProperty taskNameProperty;
     private SimpleIntegerProperty maxThreadsProperty;
+    private SimpleObjectProperty sourceProperty;
     private int taskID;
-    private Path source;
-
+    private ChangeListener<Path> sourceListener;
     private ChangeListener<String> taskNameListener;
     private ChangeListener<Number> maxThreadsListener;
 
     public SyncTask() {
         taskNameProperty = new SimpleStringProperty();
         maxThreadsProperty = new SimpleIntegerProperty();
+        sourceProperty = new SimpleObjectProperty<Path>();
     }
 
     public void startListening() {
@@ -37,8 +49,30 @@ public class SyncTask {
             DataStoreUtil.updateTask(this);
         };
 
+        sourceListener = (observable, oldValue, newValue) -> {
+            // 在这里处理 source 的变化
+            System.out.println("Source changed: " + newValue);
+            DataStoreUtil.updateTask(this);
+        };
+
         taskNameProperty.addListener(taskNameListener);
         maxThreadsProperty.addListener(maxThreadsListener);
+        sourceProperty.addListener(sourceListener);
+    }
+
+    public void startSyncTask(MainController Main) {
+        CoreSyncEngine syncEngine = new CoreSyncEngine(this);
+        var task = CompletableFuture.supplyAsync(() -> {
+            var rules = getSyncRules();
+            for(var rule : rules) {
+                syncEngine.copyAndCheck(rule);
+                rule.setInfoText("已完成");
+            }
+            return null;
+        });
+        task.whenComplete((ret, e) -> {
+            Main.taskCompleteCallback();
+        });
     }
 
     public List<SyncRule> getSyncRules() {
@@ -74,10 +108,10 @@ public class SyncTask {
     }
 
     public Path getSource() {
-        return source;
+        return (Path) sourceProperty.get();
     }
 
     public void setSource(Path source) {
-        this.source = source;
+        sourceProperty.set(source);
     }
 }

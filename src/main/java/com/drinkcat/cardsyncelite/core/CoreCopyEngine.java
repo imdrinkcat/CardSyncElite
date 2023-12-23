@@ -1,5 +1,7 @@
 package com.drinkcat.cardsyncelite.core;
 
+import com.drinkcat.cardsyncelite.module.SyncRule;
+
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -22,7 +24,7 @@ public class CoreCopyEngine {
     private void shutdownThreadPool() {
         this.executorService.shutdown(); // 在程序结束时记得关闭线程池
     }
-    private void copyFileAsync(File source, File targetDic, String fileName, CountDownLatch latch, boolean maintainStructure) {
+    private void copyFileAsync(SyncRule rule, File source, File targetDic, String fileName, CountDownLatch latch, boolean maintainStructure) {
         executorService.execute(() -> {
             try {
                 validateSourceAndTarget(source, targetDic);
@@ -52,6 +54,7 @@ public class CoreCopyEngine {
                 }
                 successFiles.put(source, target);
                 System.out.println("拷贝完成" + target.getAbsolutePath());
+                rule.setProgress((double) ((totalFiles - latch.getCount()) / latch.getCount()));
             } catch (IOException e) {
                 System.err.println("拷贝文件时发生错误: " + e.getMessage());
                 errFiles.add(source);
@@ -85,28 +88,19 @@ public class CoreCopyEngine {
         }
     }
     private CountDownLatch latch;
-    public static Map<File, File> copyTask(List<Path> files, Path target, int maxThreads, boolean maintainStructure, boolean needRename) throws Exception {
-        System.out.print("是否开始复制操作(Y/n): ");
-        Scanner scanner = new Scanner(System.in);
-        if(!scanner.nextLine().equals("Y")) {
-            throw new Exception("用户取消操作");
-        }
-
+    public static Map<File, File> copyTask(SyncRule rule, List<Path> files, Path target, int maxThreads, boolean maintainStructure, boolean needRename) throws Exception {
         CoreCopyEngine copyEngine = new CoreCopyEngine(maxThreads, (long) files.size());
-        System.out.println("线程数: " + maxThreads);
-        System.out.println("维持原目录架构: " + maintainStructure);
-        System.out.println("更改名称: " + needRename);
 
         copyEngine.latch = new CountDownLatch(files.size());
         long startTime = System.currentTimeMillis();
 
         // 开始复制操作
         System.out.println("开始复制...");
-        files.forEach(file -> copyEngine.copyFileAsync(file.toFile(), target.toFile(), file.getFileName().toString(), copyEngine.latch, maintainStructure));
-
+        rule.setProgress(0.0);
+        files.forEach(file -> copyEngine.copyFileAsync(rule, file.toFile(), target.toFile(), file.getFileName().toString(), copyEngine.latch, maintainStructure));
+        copyEngine.latch.await();
         long endTime = System.currentTimeMillis();
         long duration = endTime - startTime;
-        copyEngine.latch.await();
         System.out.println("所有文件拷贝任务完成！");
         var progress = copyEngine.getProgress();
         System.out.println("总文件数: " + progress[0]);
@@ -115,27 +109,21 @@ public class CoreCopyEngine {
         System.out.println("运行时长: " + duration / 1000 + " 秒");
 
         if(!copyEngine.errFiles.isEmpty()) {
-            copyEngine.errFilesHandler(copyEngine.errFiles, target, maintainStructure);
+            copyEngine.errFilesHandler(rule, copyEngine.errFiles, target, maintainStructure);
         }
 
         copyEngine.shutdownThreadPool();
         return copyEngine.getSuccessFiles();
     }
-    private void errFilesHandler(List<File> files, Path target, boolean maintainStructure) throws InterruptedException {
+    private void errFilesHandler(SyncRule rule, List<File> files, Path target, boolean maintainStructure) throws InterruptedException {
+        int cnt = 0;
         while(!errFiles.isEmpty()) {
+            if(cnt == 3) break;
             errFiles = new ArrayList<>();
-            System.out.println("有如下文件拷贝失败: ");
-            errFiles.stream().limit(5).forEach(System.out::println);
-            if(errFiles.size() > 5) System.out.print("等 " + files.size() + " 个文件, ");
-            System.out.println("是否重新拷贝?(Y/n)");
-            Scanner scanner = new Scanner(System.in);
-            if(!scanner.nextLine().equals("Y")) {
-                System.out.println("用户取消操作");
-                return;
-            }
             this.latch = new CountDownLatch(files.size());
-            files.forEach(file -> this.copyFileAsync(file, target.toFile(), file.getName(), this.latch, maintainStructure));
+            files.forEach(file -> this.copyFileAsync(rule, file, target.toFile(), file.getName(), this.latch, maintainStructure));
             latch.await();
+            cnt++;
         }
     }
     public Long[] getProgress() {

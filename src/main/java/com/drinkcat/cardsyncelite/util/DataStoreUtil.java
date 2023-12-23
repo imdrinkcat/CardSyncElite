@@ -1,8 +1,11 @@
 package com.drinkcat.cardsyncelite.util;
 
+import com.drinkcat.cardsyncelite.MainApplication;
 import com.drinkcat.cardsyncelite.module.SyncRule;
 import com.drinkcat.cardsyncelite.module.SyncTask;
 
+import java.net.URL;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -10,8 +13,17 @@ import java.util.List;
 import java.sql.*;
 
 public class DataStoreUtil {
-    private static final String dbUrl = "jdbc:sqlite:./dbs/data.db";
+    private static String dbUrl = "jdbc:sqlite:data.db";
+    public static void updateDbUrl(MainApplication mainApplication) {
+//        String path = mainApplication.getClass().getResource("dbs/data.db").toString();
+        URL path = mainApplication.getClass().getResource("dbs/data.db");
+//        System.err.println(Paths.get(path).toFile().getAbsolutePath());
+        dbUrl = "jdbc:sqlite:" + path.getPath();
+        System.out.println(dbUrl);
+    }
     public static List<SyncTask> getTask() {
+//        System.out.println(System.getProperty("user.dir"));
+
         List<SyncTask> taskList = new ArrayList<>();
 
         try(Connection connection = DriverManager.getConnection(dbUrl);
@@ -27,6 +39,7 @@ public class DataStoreUtil {
                 taskList.add(task);
             }
         } catch (SQLException e) {
+            System.err.println(dbUrl);
             throw new RuntimeException("数据库文件缺失!");
         }
         return taskList;
@@ -39,6 +52,7 @@ public class DataStoreUtil {
             ResultSet rs = statement.executeQuery("SELECT * FROM Rules WHERE TaskID = " + taskID);) {
             while(rs.next()) {
                 var rule = new SyncRule();
+                rule.setTask(task);
                 rule.setRuleID(rs.getInt("ID"));
                 rule.setTaskID(rs.getInt("TaskID"));
                 rule.setTarget(Paths.get(rs.getString("target")));
@@ -48,6 +62,7 @@ public class DataStoreUtil {
                 rule.setExtensions(Arrays.asList(rs
                         .getString("extensions")
                         .split(",")));
+                rule.addListeners();
                 ruleList.add(rule);
             }
         } catch (SQLException e) {
@@ -155,21 +170,5 @@ public class DataStoreUtil {
         } catch (SQLException e) {
             throw new RuntimeException("添加规则失败!", e);
         }
-    }
-
-    public static void main(String[] args) {
-        var task = new SyncTask();
-        task.setTaskName("aaa");
-        task.setMaxThreads(3);
-        task.setTaskID(4);
-        var rule = new SyncRule();
-        rule.setTaskID(task.getTaskID());
-        rule.setExtensions(List.of(".pdf", ".pptx"));
-        rule.setNeedRename(false);
-        rule.setMaintainStructure(false);
-        rule.setTarget(Paths.get("/"));
-        rule.setNeedCheck(true);
-        task.getSyncRules().add(rule);
-        removeTask(task);
     }
 }

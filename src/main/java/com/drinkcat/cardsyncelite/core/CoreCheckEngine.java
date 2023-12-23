@@ -1,4 +1,6 @@
 package com.drinkcat.cardsyncelite.core;
+import com.drinkcat.cardsyncelite.module.SyncRule;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -13,6 +15,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class CoreCheckEngine {
     private static String getMD5(File file) throws NoSuchAlgorithmException, IOException {
@@ -28,8 +31,11 @@ public class CoreCheckEngine {
         System.out.println(file + ": " + new BigInteger(1, b).toString(16));
         return new BigInteger(1, b).toString(16);
     }
-    public static List<Path> checkTask(Map<File, File> files, int maxThreads) {
+    public static List<Path> checkTask(SyncRule rule, Map<File, File> files, int maxThreads) {
         System.out.println("开始文件校验");
+        int fileCount = files.size() * 2;
+        int completed = 0;
+        rule.setProgress(0.0);
         List<Path> crcErrFiles = new ArrayList<>();
         Map<File, String> md5Map = new HashMap<>();
 
@@ -44,6 +50,17 @@ public class CoreCheckEngine {
         // 创建一个包含所有 CompletableFuture 的数组
         CompletableFuture<Void> allOf = CompletableFuture.allOf(
                 futures.toArray(new CompletableFuture[0]));
+
+        AtomicInteger completedCount = new AtomicInteger(0); // 使用 AtomicInteger 保证原子性
+
+        futures.forEach(x -> {
+            x.whenComplete((ret, e) -> {
+                // 在 CompletableFuture 完成时更新进度
+                int currentCount = completedCount.incrementAndGet();
+                double progress = (double) currentCount / fileCount;
+                rule.setProgress(progress);
+            });
+        });
 
         // 在主线程中等待所有任务完成
         allOf.join();

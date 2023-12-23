@@ -1,8 +1,12 @@
 package com.drinkcat.cardsyncelite.core;
 
+import com.drinkcat.cardsyncelite.module.SyncRule;
+import com.drinkcat.cardsyncelite.module.SyncTask;
+
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -19,84 +23,113 @@ public class CoreSyncEngine {
       4. 线程数量
       */
 
-    private final boolean needCheck;
-    private final boolean maintainStructure;
-    private final boolean needRename;
-    private final int maxThreads;
-    private final List<String> extensions;
+    private boolean needCheck;
+    private boolean maintainStructure;
+    private boolean needRename;
+    private int maxThreads;
+    private List<String> extensions;
+    private Path source;
+    private List<Path> sourceFiles;
 
-    public CoreSyncEngine() {
-        this(true, true, false, 5, List.of(".pdf"));
+    public CoreSyncEngine(SyncTask task) {
+        this.source = task.getSource();
+        this.maxThreads = task.getMaxThreads();
+    }
+    public CoreSyncEngine(Path source) {
+        this.source = source;
     }
 
-    public CoreSyncEngine(boolean needCheck, boolean maintainStructure, boolean needRename, int maxThreads, List<String> extensions) {
-        this.needCheck = needCheck;
-        this.maintainStructure = maintainStructure;
-        this.needRename = needRename;
-        this.maxThreads = maxThreads;
-        this.extensions = extensions;
-    }
-
-    public void syncFile(Path source, Path target) throws Exception {
-        // 搜索
+    private void search() {
         List<Path> searchFiles = null;
         try {
             searchFiles = CoreSearchEngine.searchTask(source, extensions);
         } catch (Exception e) {
-            throw new Exception(e.getMessage());
+            e.printStackTrace();
         }
-        if(searchFiles == null) {
-            System.out.println("共搜索到 0 个文件");
-            return;
-        }
-        else System.out.println("共搜索到 " + searchFiles.size() + " 个文件: ");
-        searchFiles.stream().limit(5).forEach(System.out::println);
-        if(searchFiles.size() > 5) System.out.print("等 " + searchFiles.size() + " 个文件, ");
-
-        // 测试异常情况 searchFiles.add(Paths.get("/asdw"));
-
-        // Copy and Check
-        copyAndCheck(searchFiles, target);
+        if(searchFiles == null) sourceFiles = new ArrayList<>();
+        else sourceFiles = searchFiles;
     }
 
-    private void copyAndCheck(List<Path> files, Path target) throws Exception {
+    public void copyAndCheck(SyncRule rule) {
+        this.needCheck = rule.isNeedCheck();
+        this.needRename = rule.isNeedRename();
+        this.maintainStructure = rule.isMaintainStructure();
+        this.extensions = rule.getExtensions();
+        try {
+            search();
+            rule.setInfoText("正在搜索中...");
+            copyAndCheck(rule, rule.getTarget());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void copyAndCheck(SyncRule rule, Path target) throws Exception {
+        copyAndCheck(rule, sourceFiles, target, 0);
+    }
+    public void copyAndCheck(SyncRule rule, List<Path> files, Path target, int cnt) throws Exception {
+        if(cnt == 3) return;
         // 复制
+        rule.setInfoText("复制中...");
         Map<File, File> successFiles = null;
         try {
-            successFiles = CoreCopyEngine.copyTask(files, target, this.maxThreads, this.maintainStructure, this.needRename);
+            successFiles = CoreCopyEngine.copyTask(rule, files, target, this.maxThreads, this.maintainStructure, this.needRename);
         } catch (InterruptedException e) {
             throw new Exception("复制进程被异常中断");
         }
 
         // 校验
         if(!needCheck) return;
-        var crcErrFiles = CoreCheckEngine.checkTask(successFiles, this.maxThreads);
-        if(crcErrFiles.isEmpty()) System.out.println("文件校验通过!");
-        else {
-            System.out.println("有 " + crcErrFiles.size() + " 个文件校验失败!");
-            crcErrFiles.stream().limit(5).forEach(System.out::println);
-            if(crcErrFiles.size() > 5) System.out.print("等 " + crcErrFiles.size() + " 个文件, ");
-
-            copyAndCheck(crcErrFiles, target);
-        }
+        rule.setInfoText("检验中...");
+        var crcErrFiles = CoreCheckEngine.checkTask(rule, successFiles, this.maxThreads);
+        if(!crcErrFiles.isEmpty()) copyAndCheck(rule, crcErrFiles, target, cnt+1);
+        else System.out.println("校验成功!");
     }
 
-    public static void main(String[] args) throws InterruptedException {
-        CoreSyncEngine syncEngine = new CoreSyncEngine();
-        Path source = Paths.get("/Users/drinkcat/Desktop/Java学习资料/");
-        Path target = Paths.get("/Users/drinkcat/Desktop/test2/test");
+    public boolean isNeedCheck() {
+        return needCheck;
+    }
 
-        Thread sync = new Thread(() -> {
-            try {
-                syncEngine.syncFile(source, target);
-            } catch (Exception e) {
-                System.out.println(e.getMessage());
-            }
-        });
-        sync.start();
+    public void setNeedCheck(boolean needCheck) {
+        this.needCheck = needCheck;
+    }
 
-        System.out.println("开始同步操作...");
-        sync.join();
-        System.out.println("同步完成!");
+    public boolean isMaintainStructure() {
+        return maintainStructure;
+    }
+
+    public void setMaintainStructure(boolean maintainStructure) {
+        this.maintainStructure = maintainStructure;
+    }
+
+    public boolean isNeedRename() {
+        return needRename;
+    }
+
+    public void setNeedRename(boolean needRename) {
+        this.needRename = needRename;
+    }
+    public Path getSource() {
+        return source;
+    }
+
+    public void setSource(Path source) {
+        this.source = source;
+    }
+
+    public int getMaxThreads() {
+        return maxThreads;
+    }
+
+    public void setMaxThreads(int maxThreads) {
+        this.maxThreads = maxThreads;
+    }
+
+    public List<String> getExtensions() {
+        return extensions;
+    }
+
+    public void setExtensions(List<String> extensions) {
+        this.extensions = extensions;
     }
 }
