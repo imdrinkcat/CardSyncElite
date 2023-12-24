@@ -14,7 +14,7 @@
             <Font size="17.0" />
          </font>
       </Label>
-      <Button fx:id="taskCardDelete" mnemonicParsing="false" pickOnBounds="false" text="X">
+      <Button fx:id="taskCardDelete" onMouseClicked="#deleteTask" mnemonicParsing="false" pickOnBounds="false" text="X">
          <HBox.margin>
             <Insets left="5.0" />
          </HBox.margin>

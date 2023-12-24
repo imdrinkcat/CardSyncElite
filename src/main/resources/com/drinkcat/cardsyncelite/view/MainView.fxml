@@ -21,7 +21,7 @@
                <children>
                   <HBox alignment="CENTER" fillHeight="false" maxHeight="50.0" prefHeight="50.0" VBox.vgrow="ALWAYS">
                      <children>
-                        <Button fx:id="createTask" alignment="CENTER" mnemonicParsing="false" text="新建任务" />
+                        <Button fx:id="createTask" onMouseClicked="#createNewTask" alignment="CENTER" mnemonicParsing="false" text="新建任务" />
                      </children>
                      <VBox.margin>
                         <Insets bottom="10.0" top="10.0" />
@@ -93,7 +93,7 @@
                         </VBox>
                         <VBox alignment="BOTTOM_CENTER">
                            <children>
-                              <Button fx:id="editTaskButton" alignment="CENTER" mnemonicParsing="false" text="修改任务名称">
+                              <Button fx:id="editTaskButton" onMouseClicked="#editTaskName" alignment="CENTER" mnemonicParsing="false" text="修改任务名称">
                                  <VBox.margin>
                                     <Insets bottom="2.0" top="2.0" />
                                  </VBox.margin></Button>

@@ -16,9 +16,11 @@ public class DataStoreUtil {
     private static String dbUrl = "jdbc:sqlite:data.db";
     public static void updateDbUrl(MainApplication mainApplication) {
 //        String path = mainApplication.getClass().getResource("dbs/data.db").toString();
-        URL path = mainApplication.getClass().getResource("dbs/data.db");
+        //URL path = mainApplication.getClass().getResource("dbs/data.db");
 //        System.err.println(Paths.get(path).toFile().getAbsolutePath());
-        dbUrl = "jdbc:sqlite:" + path.getPath();
+        //dbUrl = "jdbc:sqlite:" + path.getPath();
+        //System.out.println(dbUrl);
+        dbUrl = "jdbc:sqlite:" + System.getProperty("user.dir") + "/dbs/data.db";
         System.out.println(dbUrl);
     }
     public static List<SyncTask> getTask() {

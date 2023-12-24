@@ -26,6 +26,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 public class MainController{
@@ -55,14 +56,11 @@ public class MainController{
     private ListView<SyncTask> taskList;
     private ChangeListener<Integer> choiceBoxListener;
     private static SyncTask selectedTask = null;
+
     @FXML
     public void initialize() {
         // 初始化任务列表
-        //var tasks = DataStoreUtil.getTask();
-        //tasks.forEach(SyncTask::startListening);
-        //ObservableList<SyncTask> syncTasks = FXCollections
-        //        .observableArrayList(tasks);
-        //taskList.setItems(syncTasks);
+        refreshAll();
         taskList.setCellFactory(new Callback<ListView<SyncTask>, ListCell<SyncTask>>() {
             @Override
             public ListCell<SyncTask> call(ListView<SyncTask> syncTaskListView) {
@@ -70,12 +68,17 @@ public class MainController{
                     @Override
                     protected void updateItem(SyncTask task, boolean empty) {
                         super.updateItem(task, empty);
-                        if(empty|| task == null) return;
+                        if(empty|| task == null) {
+                            this.setText(null);
+                            this.setGraphic(null);
+                            return;
+                        }
                         FXMLLoader loader = new FXMLLoader(MainApplication.class.getResource("view/TaskCardView.fxml"));
                         try {
                             this.setGraphic(loader.load());
                             TaskCardController controller = loader.getController();
                             controller.setTask(task);
+                            controller.setMain(MainController.this);
                         } catch (IOException e) {
                             throw new RuntimeException("任务列表视图加载失败!");
                         }
@@ -217,5 +220,47 @@ public class MainController{
         selectedTask.getSyncRules().add(rule);
         DataStoreUtil.updateTask(selectedTask);
         refreshRules(selectedTask);
+    }
+
+    public void refreshAll() {
+        var tasks = DataStoreUtil.getTask();
+        tasks.forEach(SyncTask::startListening);
+        ObservableList<SyncTask> syncTasks = FXCollections
+                .observableArrayList(tasks);
+        taskList.setItems(syncTasks);
+        changeTaskDetail(selectedTask);
+    }
+
+    public void editTaskName(MouseEvent mouseEvent) {
+        TextInputDialog dialog = new TextInputDialog(selectedTask.getTaskName());
+        dialog.setTitle("修改名称");
+        dialog.setHeaderText(null);
+        dialog.setContentText("请输入项目名称: ");
+
+        Optional<String> result = dialog.showAndWait();
+        if (result.isPresent()){
+            System.out.println("Task name: " + result.get());
+            selectedTask.setTaskName(result.get());
+
+            refreshAll();
+        }
+    }
+
+    public void createNewTask(MouseEvent mouseEvent) {
+        TextInputDialog dialog = new TextInputDialog("Task Name");
+        dialog.setTitle("设置任务名称");
+        dialog.setHeaderText(null);
+        dialog.setContentText("请输入任务名称: ");
+
+        Optional<String> result = dialog.showAndWait();
+        if (result.isPresent()){
+            System.out.println("Task name: " + result.get());
+            SyncTask task = new SyncTask();
+            task.setTaskName(result.get());
+            task.setSource(Paths.get(System.getProperty("user.dir")));
+            task.setMaxThreads(5);
+            DataStoreUtil.addTask(task);
+            refreshAll();
+        }
     }
 }

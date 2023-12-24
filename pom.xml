@@ -75,6 +75,7 @@
                     <execution>
                         <id>default-cli</id>
                         <configuration>
+                            <mainClass>com.drinkcat.cardsyncelite.Main</mainClass>
                         </configuration>
                     </execution>
                 </executions>
