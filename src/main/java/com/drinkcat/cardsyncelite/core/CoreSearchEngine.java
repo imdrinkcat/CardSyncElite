@@ -1,5 +1,7 @@
 package com.drinkcat.cardsyncelite.core;
 
+import com.drinkcat.cardsyncelite.module.SyncTask;
+
 import java.io.IOException;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;

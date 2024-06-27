@@ -1,6 +1,7 @@
 package com.drinkcat.cardsyncelite.core;
 
 import com.drinkcat.cardsyncelite.module.SyncRule;
+import com.drinkcat.cardsyncelite.module.SyncTask;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -14,7 +15,7 @@ public class CoreCopyEngine {
     private final ScheduledThreadPoolExecutor executorService;
     private final Long totalFiles;
     private List<File> errFiles;
-    private Map<File, File> successFiles;
+    private final Map<File, File> successFiles;
     public CoreCopyEngine(int poolSize, Long size) {
         executorService = new ScheduledThreadPoolExecutor(poolSize);
         this.totalFiles = size;
@@ -49,6 +50,7 @@ public class CoreCopyEngine {
                 long size = fIn.size();
 
                 while (transferred != size) {
+                    if(CoreCopyEngine.syncTask.stopFlag) break;
                     long delta = fIn.transferTo(transferred, size - transferred, fOut);
                     transferred += delta;
                 }
@@ -88,16 +90,26 @@ public class CoreCopyEngine {
         }
     }
     private CountDownLatch latch;
-    public static Map<File, File> copyTask(SyncRule rule, List<Path> files, Path target, int maxThreads, boolean maintainStructure, boolean needRename) throws Exception {
+    private static SyncTask syncTask;
+    public static Map<File, File> copyTask(SyncTask syncTask, SyncRule rule, List<Path> files, Path target, int maxThreads, boolean maintainStructure, boolean needRename) throws Exception {
         CoreCopyEngine copyEngine = new CoreCopyEngine(maxThreads, (long) files.size());
+        CoreCopyEngine.syncTask = syncTask;
 
         copyEngine.latch = new CountDownLatch(files.size());
         long startTime = System.currentTimeMillis();
 
         // 开始复制操作
         System.out.println("开始复制...");
+
         rule.setProgress(0.0);
-        files.forEach(file -> copyEngine.copyFileAsync(rule, file.toFile(), target.toFile(), file.getFileName().toString(), copyEngine.latch, maintainStructure));
+        files.forEach(file -> {
+            if(syncTask.stopFlag) {
+                copyEngine.shutdownThreadPool();
+                return;
+            }
+            copyEngine.copyFileAsync(rule, file.toFile(), target.toFile(), file.getFileName().toString(), copyEngine.latch, maintainStructure);
+        });
+
         copyEngine.latch.await();
         long endTime = System.currentTimeMillis();
         long duration = endTime - startTime;

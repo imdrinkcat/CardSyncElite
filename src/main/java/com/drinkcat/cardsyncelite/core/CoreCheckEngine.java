@@ -1,5 +1,6 @@
 package com.drinkcat.cardsyncelite.core;
 import com.drinkcat.cardsyncelite.module.SyncRule;
+import com.drinkcat.cardsyncelite.module.SyncTask;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -18,23 +19,24 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class CoreCheckEngine {
-    private static String getMD5(File file) throws NoSuchAlgorithmException, IOException {
+    private static String getMD5(SyncTask syncTask, File file) throws NoSuchAlgorithmException, IOException {
         MessageDigest md = MessageDigest.getInstance("MD5");
+        if(syncTask.stopFlag) return "";
         try (FileInputStream fis = new FileInputStream(file)) {
             byte[] buffer = new byte[8192];
             int len;
             while ((len = fis.read(buffer)) != -1) {
                 md.update(buffer, 0, len);
+                if(syncTask.stopFlag) return "";
             }
         }
         byte[] b = md.digest();
         System.out.println(file + ": " + new BigInteger(1, b).toString(16));
         return new BigInteger(1, b).toString(16);
     }
-    public static List<Path> checkTask(SyncRule rule, Map<File, File> files, int maxThreads) {
+    public static List<Path> checkTask(SyncTask syncTask, SyncRule rule, Map<File, File> files, int maxThreads) {
         System.out.println("开始文件校验");
         int fileCount = files.size() * 2;
-        int completed = 0;
         rule.setProgress(0.0);
         List<Path> crcErrFiles = new ArrayList<>();
         Map<File, String> md5Map = new HashMap<>();
@@ -43,8 +45,9 @@ public class CoreCheckEngine {
         ExecutorService executor = Executors.newFixedThreadPool(maxThreads);
 
         files.forEach((source, target) -> {
-            createFutureTask(md5Map, futures, executor, source);
-            createFutureTask(md5Map, futures, executor, target);
+            if(syncTask.stopFlag) return;
+            createFutureTask(syncTask, md5Map, futures, executor, source);
+            createFutureTask(syncTask, md5Map, futures, executor, target);
         });
 
         // 创建一个包含所有 CompletableFuture 的数组
@@ -78,10 +81,10 @@ public class CoreCheckEngine {
         executor.shutdown();
         return crcErrFiles;
     }
-    private static void createFutureTask(Map<File, String> md5Map, List<CompletableFuture<String>> futures, ExecutorService executor, File source) {
+    private static void createFutureTask(SyncTask syncTask, Map<File, String> md5Map, List<CompletableFuture<String>> futures, ExecutorService executor, File source) {
         CompletableFuture<String> future = CompletableFuture.supplyAsync(() -> {
             try {
-                return getMD5(source);
+                return getMD5(syncTask, source);
             } catch (NoSuchAlgorithmException | IOException e) {
                 return "ERROR";
             }

@@ -22,9 +22,9 @@ import java.util.stream.Collectors;
 
 public class SyncTask {
     private List<SyncRule> syncRules = new ArrayList<>();
-    private SimpleStringProperty taskNameProperty;
-    private SimpleIntegerProperty maxThreadsProperty;
-    private SimpleObjectProperty sourceProperty;
+    private final SimpleStringProperty taskNameProperty;
+    private final SimpleIntegerProperty maxThreadsProperty;
+    private final SimpleObjectProperty sourceProperty;
     private int taskID;
     private ChangeListener<Path> sourceListener;
     private ChangeListener<String> taskNameListener;
@@ -60,14 +60,21 @@ public class SyncTask {
         sourceProperty.addListener(sourceListener);
     }
 
+    public volatile boolean stopFlag = false;
     public void startSyncTask(MainController Main) {
         CoreSyncEngine syncEngine = new CoreSyncEngine(this);
         var task = CompletableFuture.supplyAsync(() -> {
             var rules = getSyncRules();
             for(var rule : rules) {
-                syncEngine.copyAndCheck(rule);
+                if(stopFlag) {
+                    break;
+                }
+                syncEngine.copyAndCheck(rule, SyncTask.this);
                 rule.setInfoText("已完成");
             }
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                stopFlag = true;
+            }));
             return null;
         });
         task.whenComplete((ret, e) -> {

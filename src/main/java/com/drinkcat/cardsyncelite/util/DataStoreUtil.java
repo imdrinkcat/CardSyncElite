@@ -4,6 +4,7 @@ import com.drinkcat.cardsyncelite.MainApplication;
 import com.drinkcat.cardsyncelite.module.SyncRule;
 import com.drinkcat.cardsyncelite.module.SyncTask;
 
+import java.io.File;
 import java.net.URL;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -15,22 +16,15 @@ import java.sql.*;
 public class DataStoreUtil {
     private static String dbUrl = "jdbc:sqlite:data.db";
     public static void updateDbUrl(MainApplication mainApplication) {
-//        String path = mainApplication.getClass().getResource("dbs/data.db").toString();
-        //URL path = mainApplication.getClass().getResource("dbs/data.db");
-//        System.err.println(Paths.get(path).toFile().getAbsolutePath());
-        //dbUrl = "jdbc:sqlite:" + path.getPath();
-        //System.out.println(dbUrl);
-        dbUrl = "jdbc:sqlite:" + System.getProperty("user.dir") + "/dbs/data.db";
+        dbUrl = "jdbc:sqlite:" + System.getProperty("user.dir") + File.separator + "dbs" + File.separator + "data.db";
         System.out.println(dbUrl);
     }
     public static List<SyncTask> getTask() {
-//        System.out.println(System.getProperty("user.dir"));
-
         List<SyncTask> taskList = new ArrayList<>();
 
         try(Connection connection = DriverManager.getConnection(dbUrl);
             Statement statement = connection.createStatement();
-            ResultSet rs = statement.executeQuery("select * from Tasks");) {
+            ResultSet rs = statement.executeQuery("select * from Tasks")) {
             while(rs.next()) {
                 var task = new SyncTask();
                 task.setTaskName(rs.getString("TaskName"));
@@ -51,7 +45,7 @@ public class DataStoreUtil {
         List<SyncRule> ruleList = new ArrayList<>();
         try(Connection connection = DriverManager.getConnection(dbUrl);
             Statement statement = connection.createStatement();
-            ResultSet rs = statement.executeQuery("SELECT * FROM Rules WHERE TaskID = " + taskID);) {
+            ResultSet rs = statement.executeQuery("SELECT * FROM Rules WHERE TaskID = " + taskID)) {
             while(rs.next()) {
                 var rule = new SyncRule();
                 rule.setTask(task);

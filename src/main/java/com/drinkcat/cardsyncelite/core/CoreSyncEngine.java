@@ -49,15 +49,17 @@ public class CoreSyncEngine {
         if(searchFiles == null) sourceFiles = new ArrayList<>();
         else sourceFiles = searchFiles;
     }
-
-    public void copyAndCheck(SyncRule rule) {
+    private SyncTask syncTask;
+    public void copyAndCheck(SyncRule rule, SyncTask syncTask) {
         this.needCheck = rule.isNeedCheck();
+        this.syncTask = syncTask;
         this.needRename = rule.isNeedRename();
         this.maintainStructure = rule.isMaintainStructure();
         this.extensions = rule.getExtensions();
         try {
             search();
             rule.setInfoText("正在搜索中...");
+            if(syncTask.stopFlag) return;
             copyAndCheck(rule, rule.getTarget());
         } catch (Exception e) {
             e.printStackTrace();
@@ -69,19 +71,22 @@ public class CoreSyncEngine {
     }
     public void copyAndCheck(SyncRule rule, List<Path> files, Path target, int cnt) throws Exception {
         if(cnt == 3) return;
+        if(syncTask.stopFlag) return;
         // 复制
         rule.setInfoText("复制中...");
         Map<File, File> successFiles = null;
         try {
-            successFiles = CoreCopyEngine.copyTask(rule, files, target, this.maxThreads, this.maintainStructure, this.needRename);
+            successFiles = CoreCopyEngine.copyTask(syncTask, rule, files, target, this.maxThreads, this.maintainStructure, this.needRename);
         } catch (InterruptedException e) {
             throw new Exception("复制进程被异常中断");
         }
 
+        if(syncTask.stopFlag) return;
         // 校验
         if(!needCheck) return;
         rule.setInfoText("检验中...");
-        var crcErrFiles = CoreCheckEngine.checkTask(rule, successFiles, this.maxThreads);
+        var crcErrFiles = CoreCheckEngine.checkTask(syncTask, rule, successFiles, this.maxThreads);
+        if(syncTask.stopFlag) return;
         if(!crcErrFiles.isEmpty()) copyAndCheck(rule, crcErrFiles, target, cnt+1);
         else System.out.println("校验成功!");
     }

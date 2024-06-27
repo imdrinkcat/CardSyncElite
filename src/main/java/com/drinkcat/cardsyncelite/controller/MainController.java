@@ -1,10 +1,8 @@
 package com.drinkcat.cardsyncelite.controller;
 
-import com.drinkcat.cardsyncelite.Main;
 import com.drinkcat.cardsyncelite.MainApplication;
 import com.drinkcat.cardsyncelite.module.SyncRule;
 import com.drinkcat.cardsyncelite.module.SyncTask;
-import com.drinkcat.cardsyncelite.util.AlertUtil;
 import com.drinkcat.cardsyncelite.util.DataStoreUtil;
 import com.drinkcat.cardsyncelite.util.ExtensionsUtil;
 import javafx.application.Platform;
@@ -27,7 +25,6 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
 
 public class MainController{
     @FXML
@@ -180,22 +177,13 @@ public class MainController{
     @FXML
     public void startSyncTask(MouseEvent mouseEvent) {
         taskPane.setDisable(true);
-        detailSourcePath.setDisable(true);
-        detailThreadNum.setDisable(true);
-        detailChangeSourcePath.setDisable(true);
-        startTask.setDisable(true);
-        createSyncRule.setDisable(true);
-
+        taskDetailPane.setDisable(false);
         selectedTask.startSyncTask(MainController.this);
     }
 
     public void taskCompleteCallback() {
         taskPane.setDisable(false);
-        detailSourcePath.setDisable(false);
-        detailThreadNum.setDisable(false);
-        detailChangeSourcePath.setDisable(false);
-        startTask.setDisable(false);
-        createSyncRule.setDisable(false);
+        taskDetailPane.setDisable(false);
 
         Platform.runLater(() -> {
             Alert alert = new Alert(Alert.AlertType.INFORMATION);
